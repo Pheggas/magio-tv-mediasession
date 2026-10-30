@@ -1,0 +1,12 @@
+# build outputs / secrets / local state
+out/
+*.apk
+*.apks
+*.jks
+*.keystore
+*.log
+__pycache__/
+.venv/
+venv/
+*.pyc
+.DS_Store
