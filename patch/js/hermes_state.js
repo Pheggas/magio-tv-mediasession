@@ -27,7 +27,7 @@
       if (!raw) return {};
       var data = JSON.parse(raw);
       var video = data && data.state && data.state.video ? data.state.video : {};
-      return video || {};
+      return video && video.lastStreamContext ? video.lastStreamContext : (video || {});
     } catch (e) {
       return {};
     }
@@ -110,17 +110,27 @@
       var label = channelId ? document.getElementById('channel-title-label-' + channelId) : null;
       var rowChannel = label ? (label.textContent || '').replace(/\.$/, '').trim() : '';
       var rowTitle = (playingRow.textContent || '').split('\n')[0].trim();
-      var archivedRow = archive(ctx);
 
-      return {
+      // Do not apply the player context to an EPG row. The stored context may
+      // be a previous archive item with no start/end, which would produce a
+      // position without a duration. Keep timing only when the row is the
+      // same programme we already reported from the player.
+      var rowState = {
         title: rowTitle,
         channel: rowChannel,
-        positionMs: archivedRow.position,
-        durationMs: archivedRow.duration,
+        positionMs: 0,
+        durationMs: 0,
         playing: true,
-        source: source || 'LIVE',
+        source: 'UNKNOWN',
         updatedAtEpochMs: Date.now()
       };
+      if (lastState && lastState.title === rowTitle && lastState.channel === rowChannel) {
+        rowState.positionMs = lastState.positionMs;
+        rowState.durationMs = lastState.durationMs;
+        rowState.playing = lastState.playing;
+        rowState.source = lastState.source;
+      }
+      return rowState;
     }
 
     return null;

@@ -40,6 +40,9 @@ public final class NowPlayingCodecTest {
         NowPlayingState tooLong = new NowPlayingState("x", "y", 5000, 1000, false, "live", 1);
         assertEquals(1000L, tooLong.positionMs);
         assertEquals("LIVE", tooLong.source);
+
+        NowPlayingState noDuration = new NowPlayingState("x", "y", 5000, 0, false, "LIVE", 1);
+        assertEquals(0L, noDuration.positionMs);
     }
 
     private static void assertNotNull(Object value) {

@@ -19,7 +19,7 @@ public final class NowPlayingState {
         this.channel = channel == null ? "" : channel.trim();
         this.durationMs = Math.max(0, durationMs);
         long position = Math.max(0, positionMs);
-        this.positionMs = this.durationMs > 0 ? Math.min(position, this.durationMs) : position;
+        this.positionMs = this.durationMs > 0 ? Math.min(position, this.durationMs) : 0;
         this.playing = playing;
         this.source = source == null || source.trim().isEmpty()
                 ? SOURCE_UNKNOWN

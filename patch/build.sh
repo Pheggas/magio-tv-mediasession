@@ -30,6 +30,7 @@ if [ ! -f "$KEYSTORE" ]; then
     -storepass "$KS_PASS" -keypass "$KS_PASS" -keyalg RSA -keysize 2048 \
     -validity 10000 -dname "CN=Magio TV Now Playing Patch" >/dev/null
   echo "generated $KEYSTORE"
+  echo "WARNING: a new signing key cannot update an existing patched install; uninstall first." >&2
 fi
 
 echo "[1/8] checking version"

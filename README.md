@@ -88,7 +88,9 @@ Notes:
   `platforms/android-XX/android.jar` (API 34 used here)
 - [apktool](https://apktool.org/) 2.9.x jar
 - `adb`
-- No Python runtime is required. The old host watcher has been removed.
+- Python 3.9+ (build scripts only)
+- No Python runtime is required after installation. The old host watcher has
+  been removed.
 
 No root. No Frida. The patched app is re-signed, so Android requires an
 uninstall/reinstall and a fresh Magio login/device activation.
