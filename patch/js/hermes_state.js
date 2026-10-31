@@ -21,6 +21,12 @@
     return match ? (parseInt(match[1], 10) * 60 + parseInt(match[2], 10)) * 60000 : 0;
   }
 
+  function span(start, end) {
+    var delta = clockMs(end) - clockMs(start);
+    if (delta < 0) delta += 24 * 60 * 60000;
+    return Math.max(delta, 0);
+  }
+
   function moduleContext() {
     try {
       var raw = localStorage.getItem('module-player');
@@ -81,15 +87,15 @@
       var times = textList('.seekbar-time').filter(function (value) {
         return /^\d{1,2}:\d{2}$/.test(value);
       });
-      var duration = times.length >= 2
-        ? Math.max(clockMs(times[1]) - clockMs(times[0]), 0)
-        : 0;
+      var duration = times.length >= 2 ? span(times[0], times[1]) : 0;
       var position = duration > 0 ? Math.round(duration * progressPercent() / 100) : 0;
 
       if (source === 'ARCHIVE') {
         var archived = archive(ctx);
-        if (archived.duration > 0) duration = archived.duration;
-        if (archived.position > 0) position = archived.position;
+        if (archived.duration > 0) {
+          duration = archived.duration;
+          position = Math.max(0, Math.min(archived.position, duration));
+        }
       }
 
       return {
@@ -170,13 +176,18 @@
       }
       var next = wire(state);
       if (!force && next === last) return;
+      if (!window.HermesNative || !window.HermesNative.postState) return;
+      window.HermesNative.postState(next);
       last = next;
       lastState = state;
-      if (window.HermesNative && window.HermesNative.postState) {
-        window.HermesNative.postState(next);
-      }
     } catch (e) {}
   }
+
+  window.__hermesTest = {
+    clockMs: clockMs,
+    span: span,
+    archive: archive
+  };
 
   window.__hermesKick = function () { post(true); };
 
@@ -216,5 +227,5 @@
   }, 10000);
 
   post(true);
-  return 'ok';
+  return (window.HermesNative && window.HermesNative.postState) ? 'ok' : 'no-bridge';
 })();

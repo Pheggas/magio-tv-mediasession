@@ -19,7 +19,7 @@ public final class HermesSession {
     private static final String SESSION_TAG = "MagioNowPlaying";
 
     private static MediaSession session;
-    private static NowPlayingStore store;
+    private static final NowPlayingStore STORE = new NowPlayingStore();
     private static HermesWebViewSource source;
 
     private HermesSession() {
@@ -28,32 +28,33 @@ public final class HermesSession {
     public static synchronized void start(Application app) {
         if (session != null) return;
 
-        store = new NowPlayingStore();
         session = new MediaSession(app, SESSION_TAG);
         session.setFlags(0);
         session.setActive(true);
-        store.addListener(new NowPlayingStore.Listener() {
+        STORE.addListener(new NowPlayingStore.Listener() {
             @Override
             public void onState(NowPlayingState state) {
                 publish(state);
             }
         });
-        publish(store.get());
+        publish(STORE.get());
 
-        source = new HermesWebViewSource(app, store);
+        source = new HermesWebViewSource(app, STORE);
         source.start();
     }
 
-    /** V2 seam; do not remove. */
+    /** V2 seam; do not remove. Never null. */
     public static NowPlayingStore store() {
-        return store;
+        return STORE;
     }
 
     private static void publish(NowPlayingState state) {
         if (session == null) return;
 
         boolean hasContent = state.hasContent();
-        String displayTitle = hasContent ? state.title : "Magio TV";
+        String displayTitle = !state.title.isEmpty()
+                ? state.title
+                : (!state.channel.isEmpty() ? state.channel : "Magio TV");
 
         MediaMetadata metadata = new MediaMetadata.Builder()
                 .putString(MediaMetadata.METADATA_KEY_TITLE, displayTitle)

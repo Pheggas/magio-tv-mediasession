@@ -12,11 +12,7 @@ import sys
 MARKER = "invoke-super {p0}, Landroid/app/Application;->onCreate()V"
 
 INJECT = """
-    move-object v1, p0
-
-    check-cast v1, Landroid/app/Application;
-
-    invoke-static {v1}, Lcom/telekom/tv/player/HermesSession;->start(Landroid/app/Application;)V
+    invoke-static {p0}, Lcom/telekom/tv/player/HermesSession;->start(Landroid/app/Application;)V
 """
 
 
@@ -31,12 +27,6 @@ def main() -> int:
         return 0
     if MARKER not in text:
         print(f"marker not found in {path}", file=sys.stderr)
-        return 1
-    if ".locals 2" not in text:
-        print(
-            "expected .locals >= 2 in onCreate; adjust the register plan before patching",
-            file=sys.stderr,
-        )
         return 1
     text = text.replace(MARKER, MARKER + INJECT, 1)
     path.write_text(text, encoding="utf-8")

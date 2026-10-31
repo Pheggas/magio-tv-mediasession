@@ -103,7 +103,11 @@ final class HermesWebView {
         @JavascriptInterface
         public void postState(String payload) {
             NowPlayingState state = NowPlayingCodec.decode(payload);
-            if (state != null && (!state.isEmpty() || !store.get().hasContent())) {
+            if (state == null) return;
+            if (state.playing && !store.isForeground()) {
+                state = state.withPlaying(false);
+            }
+            if (!state.isEmpty() || !store.get().hasContent()) {
                 store.set(state);
             }
         }

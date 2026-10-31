@@ -14,3 +14,7 @@ javac -d "$OUT" \
 
 java -cp "$OUT" com.telekom.tv.player.NowPlayingCodecTest
 java -cp "$OUT" com.telekom.tv.player.NowPlayingStoreTest
+
+if command -v node >/dev/null 2>&1; then
+  node "$HERE/js/hermes_state.test.js"
+fi

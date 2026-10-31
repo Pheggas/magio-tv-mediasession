@@ -10,16 +10,29 @@ public final class NowPlayingStore {
 
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
     private volatile NowPlayingState state = NowPlayingState.empty();
+    private volatile boolean foreground = true;
 
     public NowPlayingState get() {
         return state;
     }
 
+    public boolean isForeground() {
+        return foreground;
+    }
+
+    public void setForeground(boolean foreground) {
+        this.foreground = foreground;
+    }
+
     public synchronized void set(NowPlayingState next) {
         if (next == null) return;
         NowPlayingState previous = state;
-        if (next.equals(previous)) return;
-        if (next.isEmpty() && previous.isEmpty()) return;
+        if (next.sameContent(previous)) {
+            // Keep the freshness timestamp current without churning the
+            // MediaSession binder on every observer tick.
+            state = next;
+            return;
+        }
         state = next;
         for (Listener listener : listeners) {
             listener.onState(next);

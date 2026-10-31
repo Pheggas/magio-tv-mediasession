@@ -5,8 +5,25 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class NowPlayingStoreTest {
     public static void main(String[] args) {
         dedupeAndClear();
+        differentTimestampsDoNotNotify();
         pauseFreezesPosition();
         System.out.println("OK");
+    }
+
+    private static void differentTimestampsDoNotNotify() {
+        NowPlayingStore store = new NowPlayingStore();
+        AtomicInteger calls = new AtomicInteger();
+        store.addListener(state -> calls.incrementAndGet());
+
+        store.set(new NowPlayingState("Duel", "JEDNOTKA HD", 1000, 10000,
+                true, "LIVE", 1000));
+        store.set(new NowPlayingState("Duel", "JEDNOTKA HD", 1000, 10000,
+                true, "LIVE", 2000));
+        assertEquals(1, calls.get());
+
+        store.set(new NowPlayingState("Duel", "JEDNOTKA HD", 2000, 10000,
+                true, "LIVE", 3000));
+        assertEquals(2, calls.get());
     }
 
     private static void dedupeAndClear() {

@@ -43,6 +43,9 @@ public final class NowPlayingCodecTest {
 
         NowPlayingState noDuration = new NowPlayingState("x", "y", 5000, 0, false, "LIVE", 1);
         assertEquals(0L, noDuration.positionMs);
+
+        NowPlayingState channelOnly = new NowPlayingState("", "JEDNOTKA HD", 0, 0, false, "LIVE", 1);
+        assertEquals(true, channelOnly.hasContent());
     }
 
     private static void assertNotNull(Object value) {

@@ -32,11 +32,28 @@ public final class NowPlayingState {
     }
 
     public boolean hasContent() {
-        return !title.isEmpty();
+        return !title.isEmpty() || !channel.isEmpty();
     }
 
     public boolean isEmpty() {
         return !hasContent();
+    }
+
+    public NowPlayingState withPlaying(boolean playing) {
+        return new NowPlayingState(title, channel, positionMs, durationMs,
+                playing, source, updatedAtEpochMs);
+    }
+
+    /** Same programme/position, ignoring the freshness timestamp. */
+    public boolean sameContent(NowPlayingState other) {
+        if (this == other) return true;
+        if (other == null) return false;
+        return positionMs == other.positionMs
+                && durationMs == other.durationMs
+                && playing == other.playing
+                && title.equals(other.title)
+                && channel.equals(other.channel)
+                && source.equals(other.source);
     }
 
     /**
