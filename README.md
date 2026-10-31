@@ -2,13 +2,29 @@
 
 Show **what is actually playing on Magio TV** (channel, programme, position,
 duration) in Home Assistant's TV card — the same way YouTube/MediaSession apps
-do — without OCR, screenshots, or stream extraction.
+do — without OCR, screenshots, stream extraction, a host watcher, or WebView
+debugging.
 
 Tested with **Magio TV 3.7.6** on a Sony BRAVIA KD-49XD7005 (Android 9,
-armeabi-v7a) and an Android TV 12 arm64 emulator.
+armeabi-v7a).
 
 > **Status:** personal-use proof of concept. The patch is version-specific and
 > must be rebased for each Magio release. Read [Legal](#legal) before using.
+
+---
+
+## What this is
+
+V1 is **observation only**:
+
+- The patched Magio app publishes a standard Android `MediaSession`.
+- Home Assistant reads it through an existing consumer — no Magio-specific HA
+  integration, no custom add-on, no MQTT requirement.
+- The app updates the session itself from its own WebView; there is no host
+  process, no ADB forwarding, and no debugging socket.
+
+V2 (channel list, EPG, channel switching, ad-skip) is a separate optional
+control plane and is **not implemented here**. See [V2 boundary](#v2-boundary).
 
 ---
 
@@ -16,33 +32,51 @@ armeabi-v7a) and an Android TV 12 arm64 emulator.
 
 ```
 Magio TV app (patched, re-signed)
- ├─ MainApplication.onCreate()
- │   ├─ WebView.setWebContentsDebuggingEnabled(true)   ← enables CDP
- │   └─ HermesSession.start(app)                        ← native MediaSession
- └─ HermesSession
-     └─ BroadcastReceiver  ← "com.telekom.magiogo.HERMES_UPDATE"
-         └─ android.media.session.MediaSession
-             ├─ Metadata: title, artist (channel), duration
-             └─ PlaybackState: position, playing
-
-Host (this repo)
- └─ tools/magio_now_playing.py
-     ├─ adb forward tcp:9222 → webview_devtools_remote_<pid>
-     ├─ CDP Runtime.evaluate on the Magio WebView
-     │   ├─ `.video-maxi-player` when the player screen is open
-     │   └─ `.row-item.playing` when browsing EPG/home
-     └─ adb shell am broadcast ... HERMES_UPDATE (ms)
+ └─ MainApplication.onCreate()
+     └─ HermesSession.start(app)
+         ├─ android.media.session.MediaSession "MagioNowPlaying"
+         │   ├─ Metadata: title, artist (channel), duration
+         │   └─ PlaybackState: position, playing/paused
+         └─ HermesWebViewSource
+             ├─ ActivityLifecycleCallbacks → StbPlayerActivity
+             ├─ HermesWebView → webContent WebView
+             │   ├─ injects a guarded JS observer
+             │   └─ HermesNative.postState(...)
+             └─ NowPlayingStore → MediaSession
 ```
 
-Home Assistant's **Bravia/Sony** integration (`media_player.kd_49xd7005` in the
-test setup) reads `dumpsys media_session` from the TV and shows the metadata.
-HA's stock **Android TV** integration only exposes power/app/source, not media
-metadata — use a MediaSession-reading integration for the card.
+The JS observer reads the app's own player overlay and the `.row-item.playing`
+marker. The EPG's focused/hovered item (`#detail-preview-title` outside the
+player) is never used; otherwise the card would follow the remote pointer
+instead of actual playback.
 
-The watcher deliberately reads the app's **`.row-item.playing`** marker when the
-EPG is open. The EPG's focused/hovered item is a different element
-(`#detail-preview-title`, `:focus`) and must **not** be used; otherwise the card
-follows the remote pointer instead of the actual playback.
+No host-side script is required. `HermesSession` creates the session when the
+application starts, and the WebView bridge keeps it current.
+
+---
+
+## Home Assistant consumers
+
+Pick one; they all read the same MediaSession.
+
+| Setup | Consumer | What you install |
+|---|---|---|
+| Sony Bravia | `braviatv` | Nothing extra in HA; the patch is enough |
+| MQTT user | `MediaSession2MQTT` | Its Android TV app + your MQTT broker; HA MQTT Discovery creates the entity |
+| No Sony, no MQTT | `hacs-adb-media-session` | One HACS integration; polls ADB, read-only |
+
+Notes:
+
+- Sony's `braviatv` reads the TV's playing-content API. It showed the patched
+  session on the tested KD-49XD7005, but Sony behaviour can vary by model.
+- `MediaSession2MQTT` uses Android's notification-listener API and supports
+  Home Assistant MQTT Discovery. It publishes title, duration, position and
+  application ID; it does **not** publish artist/channel, so the channel name
+  may be absent in that path.
+- `hacs-adb-media-session` parses `dumpsys media_session` and exposes a
+  read-only media player. It is the fallback when neither Sony nor MQTT fits.
+- HA's stock **Android TV** integration exposes power/app/source, not media
+  metadata. Do not use it for the TV card.
 
 ---
 
@@ -54,7 +88,7 @@ follows the remote pointer instead of the actual playback.
   `platforms/android-XX/android.jar` (API 34 used here)
 - [apktool](https://apktool.org/) 2.9.x jar
 - `adb`
-- Python 3.9+ with `websockets`
+- No Python runtime is required. The old host watcher has been removed.
 
 No root. No Frida. The patched app is re-signed, so Android requires an
 uninstall/reinstall and a fresh Magio login/device activation.
@@ -70,6 +104,7 @@ adb shell pm path com.telekom.magiogo
 # package:/data/app/.../base.apk
 # package:/data/app/.../split_config.cs.apk
 # ...
+
 adb pull /data/app/.../base.apk magio_base.apk
 adb pull /data/app/.../split_config.cs.apk magio_split_cs.apk
 adb pull /data/app/.../split_config.sk.apk magio_split_sk.apk
@@ -91,16 +126,34 @@ export KS_PASS='choose-a-password'
 
 The build:
 
-1. `apktool d -r` — keeps the original `resources.arsc` (rebuilding resources
+1. Checks `versionName == 3.7.6`; fails loudly on a different release.
+2. `apktool d -r` — keeps the original `resources.arsc` (rebuilding resources
    broke Media3 drawables in testing).
-2. Inserts the WebView-debug + `HermesSession.start()` calls into
-   `MainApplication.smali`.
-3. Compiles `HermesSession.java` with `javac`, dexes it with `d8`, and adds it as
-   `classes3.dex`.
-4. Rebuilds with `apktool b -r`, zipaligns, signs the base and splits with the
+3. Inserts only `HermesSession.start()` into `MainApplication.smali`. It does
+   **not** call `setWebContentsDebuggingEnabled`.
+4. Generates `HermesJs.java` from `patch/js/hermes_state.js`.
+5. Compiles all `patch/java` sources with `javac`, dexes them with `d8`, and
+   adds them as `classes3.dex`.
+6. Rebuilds with `apktool b -r`, zipaligns, signs the base and splits with the
    same key.
 
 Output: `out/base.apk` + `out/magio_split_*.apk`.
+
+### Tests
+
+```bash
+./patch/test.sh
+```
+
+Expected:
+
+```
+OK
+OK
+```
+
+The tests cover the wire format, malformed payloads, position/duration
+clamping, store de-duplication, and pause position extrapolation.
 
 ---
 
@@ -117,56 +170,56 @@ The account's device limit may require unpairing an old device first.
 
 ---
 
-## Run the watcher
+## Validate
+
+With Magio playing a live channel:
 
 ```bash
-python3 -m pip install -r tools/requirements.txt
-
-python3 tools/magio_now_playing.py \
-  --serial 192.168.1.151:5555 \
-  --adb "$(command -v adb)"
+adb shell dumpsys media_session | sed -n '/MagioNowPlaying/,+12p'
 ```
 
-It discovers the WebView socket, forwards it to `tcp:9222`, reads the app's own
-state every 5 seconds, and broadcasts updates to the in-app MediaSession.
+Expected: one `MagioNowPlaying` session with a title, channel artist, and
+`state=PlaybackState {state=3, ...}` while playing.
 
-Keep it running (systemd, launchd, a small always-on host, or a cron-supervised
-loop). Without the watcher the session keeps the last metadata but stops
-advancing.
+No debugging socket should exist:
+
+```bash
+adb shell cat /proc/net/unix | grep webview_devtools_remote || echo NO_DEBUG_SOCKET
+```
+
+Expected: `NO_DEBUG_SOCKET`.
+
+No host watcher should be running:
+
+```bash
+pgrep -af 'magio_now_playing|magio_tv_watch|magio_tv_native' || echo NO_HOST_WATCHER
+```
+
+Expected: `NO_HOST_WATCHER`.
+
+Scrolling the EPG must not change the session; the playing programme must stay
+in `title=`. Playing an archive must show the archive duration/position.
 
 ---
 
-## Home Assistant
+## V2 boundary
 
-- Add the TV with the **Bravia/Sony** integration (or another integration that
-  reads `dumpsys media_session`).
-- The TV card should show `media_title`, `media_artist` (channel),
-  `media_duration`, `media_position`.
-- HA's stock **Android TV** integration is not enough for title/position.
+V2 is deliberately separate. It will add:
 
----
+- channel list and EPG;
+- channel switching;
+- later, ad-skip experiments.
 
-## Patch details
+That requires a Magio-specific control plane (local API/WebSocket or an
+equivalent). V1 must not grow a server or an open port. The only seam V1
+provides is:
 
-`MainApplication.onCreate()` after `invoke-super`:
+- `HermesSession.store()` returning the synchronized `NowPlayingStore`;
+- `NowPlayingStore.Listener` for state changes;
+- a reserved `FEATURES=media+control` build profile.
 
-```smali
-const/4 v0, 0x1
-invoke-static {v0}, Landroid/webkit/WebView;->setWebContentsDebuggingEnabled(Z)V
-
-move-object v1, p0
-check-cast v1, Landroid/app/Application;
-invoke-static {v1}, Lcom/telekom/tv/player/HermesSession;->start(Landroid/app/Application;)V
-```
-
-`HermesSession.java` creates a framework `MediaSession`, registers a dynamic
-receiver for `com.telekom.magiogo.HERMES_UPDATE`, and updates metadata/state.
-Extras: `title`, `channel` (string), `position`, `duration` (**long, ms**),
-`playing` (boolean).
-
-The app's player store (`localStorage['module-player']`) uses **milliseconds**
-for `lastStreamContext.position`; the bridge extras are also milliseconds, but
-the watcher's internal math is seconds. Keep the conversion in mind.
+See `patch/control/README.md`. Do not make V2 modify the V1 state model or
+MediaSession publisher.
 
 ---
 
@@ -174,12 +227,12 @@ the watcher's internal math is seconds. Keep the conversion in mind.
 
 | Symptom | Check |
 |---|---|
-| No `webview_devtools_remote` socket | Patch applied? `MainApplication.onCreate` calls `setWebContentsDebuggingEnabled(true)`. |
-| CDP `HTTP 500` / connection refused | Stale `adb forward`; re-run watcher with `--port` or `adb forward --remove tcp:9222`. |
-| Card shows the EPG-focused show | Use `.row-item.playing`, never `#detail-preview-title` on the EPG screen. |
-| Archive timing absurd | `module-player.position` is ms; divide by 1000 before sending seconds, and send ms to the receiver. |
+| No `MagioNowPlaying` session | Is the APK patched? `MainApplication.onCreate` must call `HermesSession.start`. |
+| Session exists but title is `Magio TV` | The WebView id is wrong or the JS observer has not installed. Check `webContent` in `StbPlayerActivity`. |
+| Card shows the EPG-focused show | Use `.row-item.playing`; never use `#detail-preview-title` outside the player. |
+| Archive duration/position wrong | `module-player` position is milliseconds; archive start/end come from the stream URL query. |
 | No metadata in HA | The integration must read MediaSession; stock `androidtv` does not. |
-| App crashes after patching | `classes3.dex` missing, or `HermesSession` inner classes not dexed (`d8` the whole class directory). |
+| App crashes after patching | `classes3.dex` missing, or inner classes not dexed; `d8` the whole class directory. |
 
 ---
 
