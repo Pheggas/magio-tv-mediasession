@@ -1,7 +1,9 @@
 # build outputs / secrets / local state
 out/
+out-v1/
 *.apk
 *.apks
+*.idsig
 *.jks
 *.keystore
 *.log

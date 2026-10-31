@@ -18,7 +18,7 @@
 
   function clockMs(value) {
     var match = /^(\d{1,2}):(\d{2})$/.exec(value || '');
-    return match ? (parseInt(match[1], 10) * 60 + parseInt(match[2], 10)) * 1000 : 0;
+    return match ? (parseInt(match[1], 10) * 60 + parseInt(match[2], 10)) * 60000 : 0;
   }
 
   function moduleContext() {
@@ -123,15 +123,7 @@
       };
     }
 
-    return {
-      title: '',
-      channel: '',
-      positionMs: 0,
-      durationMs: 0,
-      playing: false,
-      source: 'UNKNOWN',
-      updatedAtEpochMs: Date.now()
-    };
+    return null;
   }
 
   function enc(value) {
@@ -152,13 +144,24 @@
   }
 
   var last = '';
+  var lastState = null;
 
   function post(force) {
     try {
       var state = snapshot();
+      if (!state) {
+        // EPG/home sometimes has no `.playing` marker. Keep the last known
+        // programme instead of clearing the card while the user browses.
+        if (lastState) return;
+        state = {
+          title: '', channel: '', positionMs: 0, durationMs: 0,
+          playing: false, source: 'UNKNOWN', updatedAtEpochMs: Date.now()
+        };
+      }
       var next = wire(state);
       if (!force && next === last) return;
       last = next;
+      lastState = state;
       if (window.HermesNative && window.HermesNative.postState) {
         window.HermesNative.postState(next);
       }

@@ -25,22 +25,37 @@ final class HermesWebView {
     static void attach(WebView webView, NowPlayingStore store) {
         if (webView == null) return;
         webView.getSettings().setJavaScriptEnabled(true);
+        boolean first;
         synchronized (ATTACHED) {
-            if (ATTACHED.add(webView)) {
+            first = ATTACHED.add(webView);
+            if (first) {
                 webView.addJavascriptInterface(new Bridge(store), "HermesNative");
             }
         }
-        install(webView);
-        MAIN.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                install(webView);
-            }
-        }, 30000);
+        if (first) {
+            MAIN.post(new Runnable() {
+                @Override
+                public void run() {
+                    install(webView);
+                    MAIN.postDelayed(this, 30000);
+                }
+            });
+        } else {
+            install(webView);
+        }
     }
 
     private static void install(final WebView webView) {
-        if (webView == null || !webView.isAttachedToWindow()) return;
+        if (webView == null) return;
+        if (!webView.isAttachedToWindow()) {
+            MAIN.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    install(webView);
+                }
+            }, 500);
+            return;
+        }
         webView.evaluateJavascript(HermesJs.INJECT, new ValueCallback<String>() {
             @Override
             public void onReceiveValue(String value) {
@@ -66,7 +81,7 @@ final class HermesWebView {
         @JavascriptInterface
         public void postState(String payload) {
             NowPlayingState state = NowPlayingCodec.decode(payload);
-            if (state != null) {
+            if (state != null && (!state.isEmpty() || !store.get().hasContent())) {
                 store.set(state);
             }
         }
