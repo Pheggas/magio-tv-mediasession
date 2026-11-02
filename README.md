@@ -1,9 +1,12 @@
-# Magio TV → native MediaSession → Home Assistant
+# Magio TV MediaSession
+
+Native Android `MediaSession` for **Magio TV** — show what is actually playing in
+Home Assistant, with no OCR, screenshots, stream extraction, host watcher, or
+WebView debugging.
 
 Show **what is actually playing on Magio TV** (channel, programme, position,
 duration) in Home Assistant's TV card — the same way YouTube/MediaSession apps
-do — without OCR, screenshots, stream extraction, a host watcher, or WebView
-debugging.
+do.
 
 Tested with **Magio TV 3.7.6** on a Sony BRAVIA KD-49XD7005 (Android 9,
 armeabi-v7a).
