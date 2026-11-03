@@ -11,9 +11,6 @@ import android.os.SystemClock;
  *
  * V1 is observation-only: actions are deliberately zero, and there is no
  * broadcast receiver. State arrives from HermesWebViewSource/HermesWebView.
- *
- * V2 seam: HermesSession.store() exposes the synchronized state and listener
- * interface; a future control server can read it without changing this class.
  */
 public final class HermesSession {
     private static final String SESSION_TAG = "MagioNowPlaying";
@@ -41,11 +38,6 @@ public final class HermesSession {
 
         source = new HermesWebViewSource(app, STORE);
         source.start();
-    }
-
-    /** V2 seam; do not remove. Never null. */
-    public static NowPlayingStore store() {
-        return STORE;
     }
 
     private static void publish(NowPlayingState state) {

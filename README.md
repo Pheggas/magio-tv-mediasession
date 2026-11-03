@@ -18,7 +18,7 @@ armeabi-v7a).
 
 ## What this is
 
-V1 is **observation only**:
+This project is **observation only**:
 
 - The patched Magio app publishes a standard Android `MediaSession`.
 - Home Assistant reads it through an existing consumer — no Magio-specific HA
@@ -26,8 +26,7 @@ V1 is **observation only**:
 - The app updates the session itself from its own WebView; there is no host
   process, no ADB forwarding, and no debugging socket.
 
-V2 (channel list, EPG, channel switching, ad-skip) is a separate optional
-control plane and is **not implemented here**. See [V2 boundary](#v2-boundary).
+The patch does not add channels, EPG, playback, DRM changes, or a second TV app.
 
 ---
 
@@ -155,10 +154,12 @@ Expected:
 ```
 OK
 OK
+OK
 ```
 
 The tests cover the wire format, malformed payloads, position/duration
-clamping, store de-duplication, and pause position extrapolation.
+clamping, store de-duplication, pause position extrapolation, and the
+live/archive/midnight duration calculations.
 
 ---
 
@@ -207,24 +208,19 @@ in `title=`. Playing an archive must show the archive duration/position.
 
 ---
 
-## V2 boundary
+## Why this exists
 
-V2 is deliberately separate. It will add:
+I contacted Slovak Telekom support repeatedly about exposing a standard Android
+`MediaSession` from Magio TV. Support confirmed that a ticket had been created,
+but after six months there was still no update, even after asking to be informed
+when one became available. Telekom then shipped a major UI redesign — a large
+app update — and the app still had no `MediaSession`.
 
-- channel list and EPG;
-- channel switching;
-- later, ad-skip experiments.
-
-That requires a Magio-specific control plane (local API/WebSocket or an
-equivalent). V1 must not grow a server or an open port. The only seam V1
-provides is:
-
-- `HermesSession.store()` returning the synchronized `NowPlayingStore`;
-- `NowPlayingStore.Listener` for state changes;
-- a reserved `FEATURES=media+control` build profile.
-
-See `patch/control/README.md`. Do not make V2 modify the V1 state model or
-MediaSession publisher.
+Rather than wait longer, I built this patch. I did not want to reverse engineer
+the app. This was the most native way to add the missing integration: the patch
+only makes the existing Magio player publish the standard `MediaSession` that
+Android apps such as YouTube already publish. It does not add a channel list,
+EPG, playback engine, DRM change, or a second TV app.
 
 ---
 

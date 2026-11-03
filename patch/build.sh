@@ -1,15 +1,11 @@
 #!/usr/bin/env bash
-# Build a V1 (media-only) patched Magio APK.
-#
-# FEATURES=media              V1: MediaSession only, no server (default)
-# FEATURES=media+control      reserved for V2; not implemented in this plan
+# Build a patched Magio TV APK with a native MediaSession.
 set -euo pipefail
 
 BASE_APK=${1:?usage: build.sh base.apk out_dir split1.apk [split2.apk ...]}
 OUT=${2:?usage: build.sh base.apk out_dir split1.apk [split2.apk ...]}
 shift 2
 SPLITS=("$@")
-FEATURES=${FEATURES:-media}
 
 : "${ANDROID_JAR:?set ANDROID_JAR to platforms/android-XX/android.jar}"
 : "${BUILD_TOOLS:?set BUILD_TOOLS to the Android build-tools directory}"
@@ -56,15 +52,6 @@ python3 "$HERE/embed_js.py" \
 echo "[5/8] compiling"
 SOURCES=$(find "$HERE/java" -name '*.java' -print)
 SOURCES="$SOURCES $WORK/generated/com/telekom/tv/player/HermesJs.java"
-if [ "$FEATURES" = "media+control" ]; then
-  if [ ! -d "$HERE/control/java" ]; then
-    echo "FEATURES=media+control is reserved for V2 and not implemented yet" >&2
-    exit 1
-  fi
-  SOURCES="$SOURCES $(find "$HERE/control/java" -name '*.java' -print)"
-  python3 "$HERE/apply_control_patch.py" \
-    "$WORK/decoded/smali_classes2/com/telekom/tv/player/MainApplication.smali"
-fi
 # shellcheck disable=SC2086
 javac -source 8 -target 8 -bootclasspath "$ANDROID_JAR" \
   -d "$WORK/classes" $SOURCES
